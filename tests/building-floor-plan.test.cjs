@@ -77,9 +77,9 @@ test('lobby, standard and top floors have visibly different spatial programs', (
   assert.equal(lobby.floorProgram.kind, 'public-lobby');
   assert.equal(top.floorRole, 'top');
   assert.equal(top.floorProgram.kind, 'top-floor');
-  assert.ok(lobby.rooms.every(room => room.kind === 'public-space'));
+  assert.ok(lobby.rooms.every(room => room.kind === 'public-lobby'));
   assert.ok(standard.rooms.every(room => room.kind === 'office'));
-  assert.ok(top.rooms.every(room => room.kind === 'public-space'));
+  assert.ok(top.rooms.every(room => room.kind === 'top-floor'));
   assert.deepEqual([...new Set(lobby.rooms.map(room => room.wallIndex))].sort(), [0, 2]);
   assert.ok(lobby.corridors.every(corridor => corridor.width === 2.4));
   assert.ok(standard.corridors.every(corridor => corridor.width === 1.8));

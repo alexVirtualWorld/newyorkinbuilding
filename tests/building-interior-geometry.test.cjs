@@ -45,8 +45,8 @@ function assertFiniteBoxes(items) {
 test('one floor creates a footprint surface, room partitions and door openings', () => {
   const data = makeData(0);
   assert.equal(data.floorY, 0);
-  assert.ok(data.walls.some(wall => wall.kind === 'room-wall'));
-  assert.ok(data.walls.some(wall => wall.kind === 'door-lintel'));
+  assert.ok(data.walls.some(wall => wall.kind.startsWith('room-wall-')));
+  assert.ok(data.walls.some(wall => wall.kind.startsWith('door-lintel')));
   assert.ok(data.walls.some(wall => wall.kind === 'core-wall'));
   assert.ok(data.corridorFloors.length > 0);
   assert.ok(data.counts.rooms > 0);
@@ -111,11 +111,13 @@ test('real-building preview selects the verified One World Trade Center survey r
   const preview = readFileSync(join(__dirname, '../js/interior-real-preview.js'), 'utf8');
   const html = readFileSync(join(__dirname, '../interior-real-preview.html'), 'utf8');
   assert.ok(preview.includes("import { REAL_BUILDINGS } from './building-geodata.js'"));
+  assert.ok(preview.includes("import { buildVerticalBuildingProgram } from './vertical-building-program.js'"));
+  assert.ok(preview.includes("profile: 'mixed-use-landmark'"));
   assert.ok(preview.includes('building.cx === -203.25 && building.cz === 5253.25'));
   assert.ok(preview.includes('combineInteriorGeometryData(floorData)'));
   assert.ok(preview.includes('for (let floor = 0; floor < facade.floorCount; floor++)'));
   assert.ok(preview.includes('roleStats[plan.floorRole].rooms += plan.rooms.length'));
-  assert.ok(preview.includes("roleStats.lobby.floors + 'F/'"));
+  assert.ok(preview.includes("verticalProgram.counts"));
   assert.ok(html.includes('./js/interior-real-preview.js'));
 });
 
@@ -134,4 +136,29 @@ test('preview page uses the same planner and geometry builder without changing c
   assert.ok(preview.includes('window.__interiorPreview = { tower, floorCount: facade.floorCount, aggregate, renderer }'));
   assert.ok(html.includes('./js/interior-preview.js'));
   assert.doesNotMatch(main, /building-interior-geometry/);
+});
+
+test('roof program clears office rooms and adds deterministic rooftop equipment', () => {
+  const plan = planner.planFloor(building, 0, facade, 7, {
+    program: { floorIndex: 7, role: 'roof', kind: 'roof-plant', label: 'Roof' }
+  });
+  assert.equal(plan.floorRole, 'roof');
+  assert.equal(plan.rooms.length, 0);
+  const data = geometry.buildInteriorGeometryData(plan);
+  assert.equal(data.floorRole, 'roof');
+  assert.equal(data.equipmentMeshes.length, 4);
+  assert.ok(data.equipmentMeshes.every(item => item.kind === 'roof-equipment'));
+  assert.ok(data.equipmentMeshes.every(item => Number.isFinite(item.x + item.y + item.z)));
+});
+
+test('specialized floor roles produce separately classifiable wall and corridor batches', () => {
+  const roles = ['lobby', 'retail', 'mechanical', 'refuge', 'observation'];
+  for (const [floor, role] of roles.entries()) {
+    const plan = planner.planFloor(building, 0, facade, floor, {
+      program: { floorIndex: floor, role, label: role }
+    });
+    const data = geometry.buildInteriorGeometryData(plan);
+    assert.ok(data.walls.every(item => item.kind.includes(role) || ['core-wall', 'core-door-lintel'].includes(item.kind)));
+    assert.ok(data.corridorFloors.every(item => item.kind === 'corridor-floor-' + role));
+  }
 });

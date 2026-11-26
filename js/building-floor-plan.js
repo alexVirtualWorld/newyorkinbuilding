@@ -8,27 +8,14 @@ const EPSILON = 1e-6;
 const STANDARD_CORRIDOR_WIDTH = 1.8;
 
 export const FLOOR_PROGRAMS = Object.freeze({
-  lobby: Object.freeze({
-    kind: 'public-lobby',
-    roomDepths: Object.freeze([7.2, 6.4]),
-    corridorWidth: 2.4,
-    edgeStride: 2,
-    bayStride: 1
-  }),
-  standard: Object.freeze({
-    kind: 'office',
-    roomDepths: Object.freeze([6.4, 5.4, 4.4]),
-    corridorWidth: STANDARD_CORRIDOR_WIDTH,
-    edgeStride: 1,
-    bayStride: 1
-  }),
-  top: Object.freeze({
-    kind: 'top-floor',
-    roomDepths: Object.freeze([4.8, 4.2]),
-    corridorWidth: 2.0,
-    edgeStride: 1,
-    bayStride: 2
-  })
+  lobby: Object.freeze({ kind: 'public-lobby', roomDepths: Object.freeze([7.2, 6.4]), corridorWidth: 2.4, edgeStride: 2, bayStride: 1 }),
+  retail: Object.freeze({ kind: 'retail', roomDepths: Object.freeze([8.0, 7.0]), corridorWidth: 2.8, edgeStride: 2, bayStride: 1 }),
+  standard: Object.freeze({ kind: 'office', roomDepths: Object.freeze([6.4, 5.4, 4.4]), corridorWidth: 1.8, edgeStride: 1, bayStride: 1 }),
+  mechanical: Object.freeze({ kind: 'building-services', roomDepths: Object.freeze([5.4]), corridorWidth: 2.0, edgeStride: 2, bayStride: 2 }),
+  refuge: Object.freeze({ kind: 'life-safety', roomDepths: Object.freeze([7.2]), corridorWidth: 2.8, edgeStride: 2, bayStride: 2 }),
+  observation: Object.freeze({ kind: 'public-observation', roomDepths: Object.freeze([5.0]), corridorWidth: 2.4, edgeStride: 2, bayStride: 2 }),
+  top: Object.freeze({ kind: 'top-floor', roomDepths: Object.freeze([4.8, 4.2]), corridorWidth: 2.0, edgeStride: 1, bayStride: 2 }),
+  roof: Object.freeze({ kind: 'roof-plant', roomDepths: Object.freeze([]), corridorWidth: 1.8, edgeStride: 1, bayStride: 1 })
 });
 
 export function floorProgramFor(floorIndex, floorCount, overrides = {}) {
@@ -36,12 +23,13 @@ export function floorProgramFor(floorIndex, floorCount, overrides = {}) {
     || floorCount < 1 || floorIndex < 0 || floorIndex >= floorCount) {
     throw new RangeError('A valid floor index and floor count are required.');
   }
-  const role = overrides.floorRole || (floorIndex === 0 ? 'lobby'
+  const role = overrides.program?.role || overrides.floorRole || (floorIndex === 0 ? 'lobby'
     : floorIndex === floorCount - 1 ? 'top' : 'standard');
   const base = FLOOR_PROGRAMS[role];
   if (!base) throw new RangeError('Unknown floor role: ' + role);
   return Object.freeze({
     role,
+    label: overrides.program?.label || role,
     kind: base.kind,
     roomDepths: Object.freeze([...(overrides.roomDepths || base.roomDepths)]),
     corridorWidth: overrides.corridorWidth ?? base.corridorWidth,
@@ -249,7 +237,7 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
   if (!core) {
     return Object.freeze({
       id: descriptor.footprintId + ':f' + floorIndex,
-      floorIndex, floorRole: floorProgram.role, floorProgram,
+      floorIndex, floorRole: floorProgram.role, floorProgram, verticalProgram: options.program || null,
       floorHeight: facade.floorHeight, footprint: descriptor.footprint,
       core: null, rooms: Object.freeze([]), corridors: Object.freeze([]),
       connectivity: Object.freeze({ connectedRoomCount: 0, totalRoomCount: 0, isConnected: false }),
@@ -291,7 +279,7 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
             z: rect.center.z + normal.z * (depth / 2 - 0.05)
           };
           candidates.push({
-            id: roomId, kind: floorProgram.kind === 'office' ? 'office' : 'public-space',
+            id: roomId, kind: floorProgram.kind,
             floorIndex, floorRole: floorProgram.role,
             wallIndex: edgeIndex, bayIndex: bay,
             bayCount: module.bayCount, phase: module.phase,
@@ -321,6 +309,8 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
     corridors.push(Object.freeze({
       id: room.id + ':corridor',
       roomId: room.id,
+      kind: 'corridor-floor-' + floorProgram.role,
+      floorRole: floorProgram.role,
       width: floorProgram.corridorWidth,
       points: Object.freeze(path.map(p => Object.freeze({ ...p })))
     }));

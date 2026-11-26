@@ -40,13 +40,15 @@ function splitDoorWall(a, b, y, options, id) {
   const halfT = gap / (2 * length);
   const left = 0.5 - halfT, right = 0.5 + halfT;
   const doorHeight = Math.min(2.15, options.wallHeight - 0.25);
+  const wallKind = options.wallKind || 'room-wall';
+  const lintelKind = options.doorLintelKind || 'door-lintel';
   const segments = [];
-  const first = boxBetween(a, interpolate(a, b, left), y, options.wallHeight, options.wallThickness, 'room-wall', id + ':a');
-  const second = boxBetween(interpolate(a, b, right), b, y, options.wallHeight, options.wallThickness, 'room-wall', id + ':b');
+  const first = boxBetween(a, interpolate(a, b, left), y, options.wallHeight, options.wallThickness, wallKind, id + ':a');
+  const second = boxBetween(interpolate(a, b, right), b, y, options.wallHeight, options.wallThickness, wallKind, id + ':b');
   if (first) segments.push(first);
   if (second) segments.push(second);
   const lintel = boxBetween(interpolate(a, b, left), interpolate(a, b, right),
-    y + doorHeight, options.wallHeight - doorHeight, options.wallThickness, 'door-lintel', id + ':lintel');
+    y + doorHeight, options.wallHeight - doorHeight, options.wallThickness, lintelKind, id + ':lintel');
   if (lintel) segments.push(lintel);
   return segments;
 }
@@ -54,11 +56,16 @@ function splitDoorWall(a, b, y, options, id) {
 function roomWalls(room, y, options) {
   const corners = room.corners;
   const walls = [];
+  const roomOptions = {
+    ...options,
+    wallKind: 'room-wall-' + (room.floorRole || 'standard'),
+    doorLintelKind: 'door-lintel-' + (room.floorRole || 'standard')
+  };
   for (let edge = 0; edge < 4; edge++) {
     const a = corners[edge], b = corners[(edge + 1) % 4];
-    if (edge === 2) walls.push(...splitDoorWall(a, b, y, options, room.id + ':door-wall'));
+    if (edge === 2) walls.push(...splitDoorWall(a, b, y, roomOptions, room.id + ':door-wall'));
     else {
-      const wall = boxBetween(a, b, y, options.wallHeight, options.wallThickness, 'room-wall', room.id + ':wall-' + edge);
+      const wall = boxBetween(a, b, y, options.wallHeight, options.wallThickness, roomOptions.wallKind, room.id + ':wall-' + edge);
       if (wall) walls.push(wall);
     }
   }
@@ -73,7 +80,7 @@ function corridorSlabs(corridor, y, options) {
     if (length < 0.05) continue;
     const center = midpoint(a, b);
     slabs.push(Object.freeze({
-      id: corridor.id + ':' + (i - 1), kind: 'corridor-floor',
+      id: corridor.id + ':' + (i - 1), kind: corridor.kind || 'corridor-floor',
       x: center.x, y: y + options.corridorHeight * 0.5, z: center.z,
       width: length + corridor.width * 0.12,
       height: options.corridorHeight, depth: corridor.width,
@@ -99,7 +106,8 @@ function coreWalls(core, y, options, entranceSide = 0) {
   for (let edge = 0; edge < 4; edge++) {
     const a = corners[edge], b = corners[(edge + 1) % 4];
     if (edge === entranceSide) walls.push(...splitDoorWall(a, b, y, {
-      ...options, doorWidth: options.coreDoorWidth
+      ...options, doorWidth: options.coreDoorWidth,
+      wallKind: 'core-wall', doorLintelKind: 'core-door-lintel'
     }, 'core:entrance'));
     else {
       const wall = boxBetween(a, b, y, options.wallHeight, options.wallThickness * 1.4, 'core-wall', 'core:wall-' + edge);
@@ -133,6 +141,23 @@ function stairTreads(zone, floorY, floorHeight, options) {
     rotationY: 0
   }));
   return result;
+}
+
+function roofEquipment(core, floorY) {
+  if (!core) return [];
+  const offsetX = core.width / 2 + 1.8;
+  const offsetZ = core.depth / 2 + 1.8;
+  const positions = [
+    { x: core.center.x - offsetX, z: core.center.z - offsetZ },
+    { x: core.center.x + offsetX, z: core.center.z - offsetZ },
+    { x: core.center.x - offsetX, z: core.center.z + offsetZ },
+    { x: core.center.x + offsetX, z: core.center.z + offsetZ }
+  ];
+  return positions.map((point, index) => Object.freeze({
+    id: 'roof-equipment-' + index, kind: 'roof-equipment',
+    x: point.x, y: floorY + 0.8, z: point.z,
+    width: 2.4, height: 1.6, depth: 2.4, rotationY: 0
+  }));
 }
 
 function elevatorShaft(zone, y, floorHeight, options) {
@@ -172,6 +197,7 @@ export function buildInteriorGeometryData(plan, overrides = {}) {
   const corridorFloors = [];
   const stairMeshes = [];
   const elevatorMeshes = [];
+  const equipmentMeshes = [];
 
   for (const room of plan.rooms) walls.push(...roomWalls(room, floorY, options));
   for (const corridor of plan.corridors) corridorFloors.push(...corridorSlabs(corridor, floorY, options));
@@ -195,20 +221,23 @@ export function buildInteriorGeometryData(plan, overrides = {}) {
       if (zone.kind === 'stair') stairMeshes.push(...stairTreads(zone, floorY, plan.floorHeight, options));
       if (zone.kind === 'elevator') elevatorMeshes.push(...elevatorShaft(zone, floorY, plan.floorHeight, options));
     }
+    if (plan.floorRole === 'roof') equipmentMeshes.push(...roofEquipment(plan.core, floorY));
   }
 
   const counts = Object.freeze({
     rooms: plan.rooms.length,
-    roomWalls: walls.filter(item => item.kind === 'room-wall').length,
-    doors: walls.filter(item => item.kind === 'door-lintel').length,
+    roomWalls: walls.filter(item => item.kind.startsWith('room-wall-')).length,
+    doors: walls.filter(item => item.kind.startsWith('door-lintel')).length,
     corridorSegments: corridorFloors.length,
     stairTreads: stairMeshes.filter(item => item.kind === 'stair-tread').length,
-    elevatorShaftWalls: elevatorMeshes.filter(item => item.kind === 'elevator-shaft-wall').length
+    elevatorShaftWalls: elevatorMeshes.filter(item => item.kind === 'elevator-shaft-wall').length,
+    roofEquipment: equipmentMeshes.length
   });
 
   return Object.freeze({
     id: plan.id + ':geometry',
     floorIndex: plan.floorIndex,
+    floorRole: plan.floorRole || 'standard',
     floorY,
     floorHeight: plan.floorHeight,
     footprint: plan.footprint,
@@ -216,6 +245,7 @@ export function buildInteriorGeometryData(plan, overrides = {}) {
     corridorFloors: Object.freeze(corridorFloors),
     stairMeshes: Object.freeze(stairMeshes),
     elevatorMeshes: Object.freeze(elevatorMeshes),
+    equipmentMeshes: Object.freeze(equipmentMeshes),
     counts
   });
 }
@@ -239,16 +269,17 @@ export function combineInteriorGeometryData(floors) {
     floorCount: floors.length,
     floorIndexRange: Object.freeze([Math.min(...floors.map(floor => floor.floorIndex)), Math.max(...floors.map(floor => floor.floorIndex))]),
     floors: Object.freeze(floors.map(floor => Object.freeze({
-      floorIndex: floor.floorIndex, floorY: floor.floorY, footprint: floor.footprint
+      floorIndex: floor.floorIndex, floorY: floor.floorY, floorRole: floor.floorRole, footprint: floor.footprint
     }))),
     walls: Object.freeze(floors.flatMap(floor => floor.walls)),
     corridorFloors: Object.freeze(floors.flatMap(floor => floor.corridorFloors)),
     stairMeshes: Object.freeze(floors.flatMap(floor => floor.stairMeshes)),
     elevatorMeshes: Object.freeze(floors.flatMap(floor => floor.elevatorMeshes)),
+    equipmentMeshes: Object.freeze(floors.flatMap(floor => floor.equipmentMeshes || [])),
     counts: Object.freeze({
       rooms: sum('rooms'), roomWalls: sum('roomWalls'), doors: sum('doors'),
       corridorSegments: sum('corridorSegments'), stairTreads: sum('stairTreads'),
-      elevatorShaftWalls: sum('elevatorShaftWalls')
+      elevatorShaftWalls: sum('elevatorShaftWalls'), roofEquipment: sum('roofEquipment')
     })
   });
 }
@@ -313,9 +344,26 @@ export function createInteriorGroup(THREE, data, materials = {}) {
     mesh.userData.parts = items.map(item => ({ id: item.id, kind: item.kind }));
     group.add(mesh);
   };
-  addBoxes(data.walls, material.wall, 'InteriorWalls');
-  addBoxes(data.corridorFloors, material.floor, 'CorridorFloors');
+  const byKind = items => {
+    const groups = new Map();
+    for (const item of items) {
+      if (!groups.has(item.kind)) groups.set(item.kind, []);
+      groups.get(item.kind).push(item);
+    }
+    return groups;
+  };
+  const roomWallMaterials = material.roomWalls || {};
+  const corridorMaterials = material.corridorFloors || {};
+  for (const [kind, items] of byKind(data.walls)) {
+    const role = kind.replace('room-wall-', '').replace('door-lintel-', '');
+    addBoxes(items, roomWallMaterials[role] || material.wall, 'InteriorWalls-' + kind);
+  }
+  for (const [kind, items] of byKind(data.corridorFloors)) {
+    const role = kind.replace('corridor-floor-', '');
+    addBoxes(items, corridorMaterials[role] || material.floor, 'CorridorFloors-' + kind);
+  }
   addBoxes(data.stairMeshes, material.stair, 'Stairs');
   addBoxes(data.elevatorMeshes, material.elevator, 'Elevators');
+  addBoxes(data.equipmentMeshes || [], material.equipment || material.elevator, 'RoofEquipment');
   return group;
 }
