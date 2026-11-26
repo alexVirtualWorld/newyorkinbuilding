@@ -220,6 +220,39 @@ export function buildInteriorGeometryData(plan, overrides = {}) {
   });
 }
 
+/** Merge floor descriptors so a whole tower renders with one floor mesh and four instanced batches. */
+export function combineInteriorGeometryData(floors) {
+  if (!Array.isArray(floors) || floors.length === 0
+    || floors.some(floor => !floor || !Array.isArray(floor.walls) || !floor.footprint?.outer)) {
+    throw new TypeError('A non-empty array of floor geometry data is required.');
+  }
+  const base = floors[0];
+  if (floors.some(floor => floor.floorHeight !== base.floorHeight || floor.id.split(':f')[0] !== base.id.split(':f')[0])) {
+    throw new TypeError('All floors must belong to the same building and use the same floor height.');
+  }
+  const sum = key => floors.reduce((total, floor) => total + (floor.counts[key] || 0), 0);
+  const floorMarker = base.id.lastIndexOf(':f');
+  const buildingPrefix = floorMarker >= 0 ? base.id.slice(0, floorMarker) : base.id;
+  return Object.freeze({
+    id: buildingPrefix + ':tower-geometry',
+    floorHeight: base.floorHeight,
+    floorCount: floors.length,
+    floorIndexRange: Object.freeze([Math.min(...floors.map(floor => floor.floorIndex)), Math.max(...floors.map(floor => floor.floorIndex))]),
+    floors: Object.freeze(floors.map(floor => Object.freeze({
+      floorIndex: floor.floorIndex, floorY: floor.floorY, footprint: floor.footprint
+    }))),
+    walls: Object.freeze(floors.flatMap(floor => floor.walls)),
+    corridorFloors: Object.freeze(floors.flatMap(floor => floor.corridorFloors)),
+    stairMeshes: Object.freeze(floors.flatMap(floor => floor.stairMeshes)),
+    elevatorMeshes: Object.freeze(floors.flatMap(floor => floor.elevatorMeshes)),
+    counts: Object.freeze({
+      rooms: sum('rooms'), roomWalls: sum('roomWalls'), doors: sum('doors'),
+      corridorSegments: sum('corridorSegments'), stairTreads: sum('stairTreads'),
+      elevatorShaftWalls: sum('elevatorShaftWalls')
+    })
+  });
+}
+
 /** Build Three.js meshes from the descriptors using caller-owned shared materials. */
 export function createInteriorGroup(THREE, data, materials = {}) {
   if (!THREE?.Group || !THREE?.Mesh || !THREE?.BoxGeometry || !data) {
@@ -234,25 +267,32 @@ export function createInteriorGroup(THREE, data, materials = {}) {
     elevator: new THREE.MeshStandardMaterial({ color: 0x343b43, roughness: 0.55, metalness: 0.35 })
   };
   const material = { ...defaults, ...materials };
-  const rings = [data.footprint.outer, ...(data.footprint.holes || [])].map((ring, index) => {
-    const points = ring.map(point => new THREE.Vector2(point.x, point.z));
-    if (points.length > 1 && points[0].distanceTo(points[points.length - 1]) < 1e-5) points.pop();
-    if (THREE.ShapeUtils.isClockWise(points) !== (index === 0)) points.reverse();
-    return points;
-  });
-  if (rings[0]?.length >= 3) {
+  const floorSources = data.floors || [{
+    floorIndex: data.floorIndex, floorY: data.floorY, footprint: data.footprint
+  }];
+  const floorPositions = [], floorIndices = [];
+  let floorVertexOffset = 0;
+  for (const floor of floorSources) {
+    const rings = [floor.footprint.outer, ...(floor.footprint.holes || [])].map((ring, index) => {
+      const points = ring.map(point => new THREE.Vector2(point.x, point.z));
+      if (points.length > 1 && points[0].distanceTo(points[points.length - 1]) < 1e-5) points.pop();
+      if (THREE.ShapeUtils.isClockWise(points) !== (index === 0)) points.reverse();
+      return points;
+    });
+    if (rings[0]?.length < 3) continue;
     const triangles = THREE.ShapeUtils.triangulateShape(rings[0], rings.slice(1));
     const points = rings.flat();
+    for (const point of points) floorPositions.push(point.x, floor.floorY, point.y);
+    for (const [a, b, c] of triangles) floorIndices.push(floorVertexOffset + a, floorVertexOffset + c, floorVertexOffset + b);
+    floorVertexOffset += points.length;
+  }
+  if (floorIndices.length) {
     const geometry = new THREE.BufferGeometry();
-    const positions = [];
-    for (const point of points) positions.push(point.x, data.floorY, point.y);
-    const indices = [];
-    for (const [a, b, c] of triangles) indices.push(a, c, b);
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setIndex(indices);
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(floorPositions, 3));
+    geometry.setIndex(floorIndices);
     geometry.computeVertexNormals();
     const floor = new THREE.Mesh(geometry, material.floor);
-    floor.name = 'FloorSurface';
+    floor.name = 'FloorSurfaces';
     floor.receiveShadow = true;
     group.add(floor);
   }

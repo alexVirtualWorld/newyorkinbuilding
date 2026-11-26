@@ -86,6 +86,37 @@ test('geometry generation is deterministic and does not mutate the floor plan', 
   assert.equal(JSON.stringify(plan), before);
 });
 
+test('many floor levels combine into one tower batch without losing floor heights', () => {
+  const floors = [0, 1, 2, 3].map(makeData);
+  const combined = geometry.combineInteriorGeometryData(floors);
+  assert.equal(combined.floorCount, 4);
+  assert.deepEqual(Array.from(combined.floorIndexRange), [0, 3]);
+  assert.equal(combined.floors.length, 4);
+  assert.equal(combined.walls.length, floors.reduce((sum, floor) => sum + floor.walls.length, 0));
+  assert.equal(combined.corridorFloors.length, floors.reduce((sum, floor) => sum + floor.corridorFloors.length, 0));
+  assert.deepEqual(Array.from(combined.floors, floor => floor.floorY), [0, 3.9, 7.8, 11.7]);
+  assert.ok(combined.id.endsWith(':tower-geometry'));
+});
+
+test('tower batch rejects empty or mixed-building input', () => {
+  assert.throws(() => geometry.combineInteriorGeometryData([]), /non-empty array/);
+  const first = makeData(0);
+  const otherBuilding = { ...building, cx: 100 };
+  const otherPlan = planner.planFloor(otherBuilding, 1, facade, 1);
+  const other = geometry.buildInteriorGeometryData(otherPlan);
+  assert.throws(() => geometry.combineInteriorGeometryData([first, other]), /same building/);
+});
+
+test('real-building preview selects the verified One World Trade Center survey record', () => {
+  const preview = readFileSync(join(__dirname, '../js/interior-real-preview.js'), 'utf8');
+  const html = readFileSync(join(__dirname, '../interior-real-preview.html'), 'utf8');
+  assert.ok(preview.includes("import { REAL_BUILDINGS } from './building-geodata.js'"));
+  assert.ok(preview.includes('building.cx === -203.25 && building.cz === 5253.25'));
+  assert.ok(preview.includes('combineInteriorGeometryData(floorData)'));
+  assert.ok(preview.includes('for (let floor = 0; floor < facade.floorCount; floor++)'));
+  assert.ok(html.includes('./js/interior-real-preview.js'));
+});
+
 test('invalid floor-plan input fails explicitly', () => {
   assert.throws(() => geometry.buildInteriorGeometryData(null), /floor plan/);
   assert.throws(() => geometry.buildInteriorGeometryData({ rooms: [], corridors: [] }), /floor plan/);
