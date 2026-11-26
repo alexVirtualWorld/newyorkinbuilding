@@ -61,10 +61,47 @@ test('a rectangular tower receives a central core, perimeter rooms and connected
   assert.equal(plan.connectivity.totalRoomCount, plan.rooms.length);
   assert.equal(plan.connectivity.isConnected, true, JSON.stringify(plan.connectivity));
   assert.equal(plan.floorRole, 'standard');
+  assert.equal(plan.floorProgram.kind, 'office');
   assert.equal(plan.core.elevatorCount, 2);
   assert.equal(plan.core.zones.filter(zone => zone.kind === 'stair').length, 2);
   assert.equal(plan.core.zones.filter(zone => zone.kind === 'elevator').length, 2);
   insideEveryFootprintPoint(plan);
+});
+
+test('lobby, standard and top floors have visibly different spatial programs', () => {
+  const building = makeBuilding(rectangle(-18, -15, 18, 15));
+  const lobby = floorPlanner.planFloor(building, 99, facade, 0);
+  const standard = floorPlanner.planFloor(building, 99, facade, 10);
+  const top = floorPlanner.planFloor(building, 99, facade, 23);
+  assert.equal(lobby.floorRole, 'lobby');
+  assert.equal(lobby.floorProgram.kind, 'public-lobby');
+  assert.equal(top.floorRole, 'top');
+  assert.equal(top.floorProgram.kind, 'top-floor');
+  assert.ok(lobby.rooms.every(room => room.kind === 'public-space'));
+  assert.ok(standard.rooms.every(room => room.kind === 'office'));
+  assert.ok(top.rooms.every(room => room.kind === 'public-space'));
+  assert.deepEqual([...new Set(lobby.rooms.map(room => room.wallIndex))].sort(), [0, 2]);
+  assert.ok(lobby.corridors.every(corridor => corridor.width === 2.4));
+  assert.ok(standard.corridors.every(corridor => corridor.width === 1.8));
+  assert.ok(top.corridors.every(corridor => corridor.width === 2.0));
+  assert.ok(lobby.rooms[0].depth > standard.rooms[0].depth);
+  assert.ok(top.rooms[0].depth < standard.rooms[0].depth);
+  assert.ok(lobby.rooms.length < standard.rooms.length);
+  assert.ok(top.rooms.length < standard.rooms.length);
+  insideEveryFootprintPoint(lobby);
+  insideEveryFootprintPoint(standard);
+  insideEveryFootprintPoint(top);
+});
+
+test('floor program overrides are explicit and reject unknown roles', () => {
+  const custom = floorPlanner.floorProgramFor(4, 24, {
+    floorRole: 'standard', roomDepths: [5.2], corridorWidth: 2.2, bayStride: 2
+  });
+  assert.equal(custom.role, 'standard');
+  assert.deepEqual(Array.from(custom.roomDepths), [5.2]);
+  assert.equal(custom.corridorWidth, 2.2);
+  assert.equal(custom.bayStride, 2);
+  assert.throws(() => floorPlanner.floorProgramFor(0, 24, { floorRole: 'mezzanine' }), /Unknown floor role/);
 });
 
 test('floor role and room module remain deterministic for the same building and floor', () => {

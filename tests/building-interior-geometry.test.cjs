@@ -114,6 +114,8 @@ test('real-building preview selects the verified One World Trade Center survey r
   assert.ok(preview.includes('building.cx === -203.25 && building.cz === 5253.25'));
   assert.ok(preview.includes('combineInteriorGeometryData(floorData)'));
   assert.ok(preview.includes('for (let floor = 0; floor < facade.floorCount; floor++)'));
+  assert.ok(preview.includes('roleStats[plan.floorRole].rooms += plan.rooms.length'));
+  assert.ok(preview.includes("roleStats.lobby.floors + 'F/'"));
   assert.ok(html.includes('./js/interior-real-preview.js'));
 });
 

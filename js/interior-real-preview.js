@@ -53,12 +53,15 @@ async function main() {
   const facade = facadeStyleFor(building);
   const floorData = [];
   let connectedRooms = 0, candidateRooms = 0, floorsWithCore = 0;
+  const roleStats = { lobby: { floors: 0, rooms: 0 }, standard: { floors: 0, rooms: 0 }, top: { floors: 0, rooms: 0 } };
   for (let floor = 0; floor < facade.floorCount; floor++) {
     const plan = planFloor(building, 35221, facade, floor);
     const data = buildInteriorGeometryData(plan);
     floorData.push(data);
     connectedRooms += plan.rooms.length;
     candidateRooms += plan.connectivity.candidateRoomCount ?? plan.rooms.length;
+    roleStats[plan.floorRole].floors++;
+    roleStats[plan.floorRole].rooms += plan.rooms.length;
     if (plan.core) floorsWithCore++;
   }
   const towerData = combineInteriorGeometryData(floorData);
@@ -91,9 +94,12 @@ async function main() {
       (building.maxX - building.minX).toFixed(1) + ' × ' + (building.maxZ - building.minZ).toFixed(1) + ' m',
     connectedRooms + ' rooms / ' + candidateRooms + ' candidates · ' + aggregate.corridorSegments + ' corridor segments',
     aggregate.stairTreads + ' stair blocks · ' + aggregate.elevatorShaftWalls + ' shaft wall segments',
-    floorsWithCore + '/' + facade.floorCount + ' floors have a valid core · one batched tower group'
+    floorsWithCore + '/' + facade.floorCount + ' floors have a valid core · one batched tower group',
+    'Lobby ' + roleStats.lobby.floors + 'F/' + roleStats.lobby.rooms + ' zones · Standard ' +
+      roleStats.standard.floors + 'F/' + roleStats.standard.rooms + ' rooms · Top ' +
+      roleStats.top.floors + 'F/' + roleStats.top.rooms + ' zones'
   ].join('  |  ');
-  window.__interiorPreview = { tower, towerData, building, facade, renderer, floorData };
+  window.__interiorPreview = { tower, towerData, building, facade, renderer, floorData, roleStats };
   await renderer.init();
   renderer.setAnimationLoop(() => {
     controls.update();

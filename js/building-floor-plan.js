@@ -5,7 +5,50 @@ import {
 } from './building-layout.js';
 
 const EPSILON = 1e-6;
-const CORRIDOR_WIDTH = 1.8;
+const STANDARD_CORRIDOR_WIDTH = 1.8;
+
+export const FLOOR_PROGRAMS = Object.freeze({
+  lobby: Object.freeze({
+    kind: 'public-lobby',
+    roomDepths: Object.freeze([7.2, 6.4]),
+    corridorWidth: 2.4,
+    edgeStride: 2,
+    bayStride: 1
+  }),
+  standard: Object.freeze({
+    kind: 'office',
+    roomDepths: Object.freeze([6.4, 5.4, 4.4]),
+    corridorWidth: STANDARD_CORRIDOR_WIDTH,
+    edgeStride: 1,
+    bayStride: 1
+  }),
+  top: Object.freeze({
+    kind: 'top-floor',
+    roomDepths: Object.freeze([4.8, 4.2]),
+    corridorWidth: 2.0,
+    edgeStride: 1,
+    bayStride: 2
+  })
+});
+
+export function floorProgramFor(floorIndex, floorCount, overrides = {}) {
+  if (!Number.isInteger(floorIndex) || !Number.isInteger(floorCount)
+    || floorCount < 1 || floorIndex < 0 || floorIndex >= floorCount) {
+    throw new RangeError('A valid floor index and floor count are required.');
+  }
+  const role = overrides.floorRole || (floorIndex === 0 ? 'lobby'
+    : floorIndex === floorCount - 1 ? 'top' : 'standard');
+  const base = FLOOR_PROGRAMS[role];
+  if (!base) throw new RangeError('Unknown floor role: ' + role);
+  return Object.freeze({
+    role,
+    kind: base.kind,
+    roomDepths: Object.freeze([...(overrides.roomDepths || base.roomDepths)]),
+    corridorWidth: overrides.corridorWidth ?? base.corridorWidth,
+    edgeStride: overrides.edgeStride ?? base.edgeStride,
+    bayStride: overrides.bayStride ?? base.bayStride
+  });
+}
 
 function ringArea(ring) {
   let area = 0;
@@ -62,8 +105,6 @@ function rectangleCorners(rect) {
 function rectangleFits(polygon, rect, sampleSpacing = 1.0) {
   const corners = rectangleCorners(rect);
   const samples = [rect.center, ...corners];
-  // Sample the full interior as well as the perimeter so a courtyard or concavity
-  // completely enclosed by a room candidate cannot be silently covered.
   const uSteps = Math.max(1, Math.ceil(rect.width / sampleSpacing));
   const vSteps = Math.max(1, Math.ceil(rect.depth / sampleSpacing));
   for (let u = 1; u < uSteps; u++) {
@@ -109,7 +150,6 @@ function interiorNormal(polygon, a, b, tangent) {
 function findCore(polygon, outer, preferredCenter, floorCount) {
   const bounds = boundsOf(outer);
   const spanX = bounds.maxX - bounds.minX, spanZ = bounds.maxZ - bounds.minZ;
-  // A footprint narrower than 12m cannot host a 6m service core plus safe circulation.
   if (Math.min(spanX, spanZ) < 12) return null;
   const base = Math.max(5.8, Math.min(8.5, Math.sqrt(spanX * spanZ) * 0.19));
   const candidates = [
@@ -159,7 +199,7 @@ function pointInRect(rect, point) {
   return Math.abs(u) < rect.width / 2 - 0.05 && Math.abs(v) < rect.depth / 2 - 0.05;
 }
 
-function routeToCore(polygon, start, end, rooms, sourceRoomId) {
+function routeToCore(polygon, start, end, rooms, sourceRoomId, corridorWidth) {
   const routes = [
     [start, end],
     [start, { x: end.x, z: start.z }, end],
@@ -172,7 +212,7 @@ function routeToCore(polygon, start, end, rooms, sourceRoomId) {
     const steps = Math.max(2, Math.ceil(length / 0.75));
     for (let i = 0; i <= steps; i++) {
       const t = i / steps, center = { x: a.x + dx * t, z: a.z + dz * t };
-      for (const side of [-CORRIDOR_WIDTH / 2, 0, CORRIDOR_WIDTH / 2]) {
+      for (const side of [-corridorWidth / 2, 0, corridorWidth / 2]) {
         const sample = { x: center.x + nx * side, z: center.z + nz * side };
         if (!polygonContains(polygon, sample.x, sample.z)
           || rooms.some(room => room.id !== sourceRoomId && pointInRect(room.rect, sample))) return false;
@@ -191,7 +231,7 @@ function routeToCore(polygon, start, end, rooms, sourceRoomId) {
 
 /**
  * Build a deterministic, renderer-independent floor plan from one surveyed footprint polygon.
- * Room bays follow the facade shader's 2/3-window module; corridors connect each room to the core.
+ * Lobby, standard and top floors have separate room-density and circulation programs.
  */
 export function planFloor(building, sourceIndex, facade, floorIndex = 0, options = {}) {
   if (!Number.isInteger(floorIndex) || floorIndex < 0 || floorIndex >= facade?.floorCount) {
@@ -203,12 +243,13 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
     holes: descriptor.footprint.holes || []
   };
   if (polygon.outer.length < 3) throw new TypeError('A floor plan requires at least three outer footprint vertices.');
+  const floorProgram = floorProgramFor(floorIndex, facade.floorCount, options);
   const center = polygonCentroid(polygon.outer);
   const core = findCore(polygon, polygon.outer, center, facade.floorCount);
   if (!core) {
     return Object.freeze({
       id: descriptor.footprintId + ':f' + floorIndex,
-      floorIndex, floorRole: options.floorRole || (floorIndex === 0 ? 'lobby' : floorIndex === facade.floorCount - 1 ? 'top' : 'standard'),
+      floorIndex, floorRole: floorProgram.role, floorProgram,
       floorHeight: facade.floorHeight, footprint: descriptor.footprint,
       core: null, rooms: Object.freeze([]), corridors: Object.freeze([]),
       connectivity: Object.freeze({ connectedRoomCount: 0, totalRoomCount: 0, isConnected: false }),
@@ -218,12 +259,12 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
 
   const module = facadeRoomModuleForFloor(floorIndex, facade.materialSeed);
   const bayWidth = facade.windowWidth * module.bayCount;
-  const roomDepths = options.roomDepths || [6.4, 5.4, 4.4];
   const candidates = [];
   let roomSequence = 0;
 
   for (const ring of [polygon.outer, ...polygon.holes]) {
     for (let edgeIndex = 0; edgeIndex < ring.length; edgeIndex++) {
+      if (edgeIndex % floorProgram.edgeStride !== 0) continue;
       const a = ring[edgeIndex], b = ring[(edgeIndex + 1) % ring.length];
       const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
       if (length < bayWidth + 1) continue;
@@ -234,10 +275,10 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
       if (count < 1) continue;
       const usedLength = count * bayWidth;
       const startOffset = (length - usedLength) / 2 + module.phase * facade.windowWidth * 0.12;
-      for (let bay = 0; bay < count; bay++) {
+      for (let bay = 0; bay < count; bay += floorProgram.bayStride) {
         const along = Math.min(length - bayWidth / 2 - 0.1, startOffset + bayWidth * (bay + 0.5));
         const wallPoint = { x: a.x + tangent.x * along, z: a.z + tangent.z * along };
-        for (const depth of roomDepths) {
+        for (const depth of floorProgram.roomDepths) {
           const rect = {
             center: { x: wallPoint.x + normal.x * (depth / 2 + 0.35), z: wallPoint.z + normal.z * (depth / 2 + 0.35) },
             tangent, normal, width: bayWidth - 0.25, depth
@@ -250,7 +291,8 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
             z: rect.center.z + normal.z * (depth / 2 - 0.05)
           };
           candidates.push({
-            id: roomId, kind: 'apartment', floorIndex,
+            id: roomId, kind: floorProgram.kind === 'office' ? 'office' : 'public-space',
+            floorIndex, floorRole: floorProgram.role,
             wallIndex: edgeIndex, bayIndex: bay,
             bayCount: module.bayCount, phase: module.phase,
             width: rect.width, depth: rect.depth,
@@ -265,10 +307,10 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
   const connectedRooms = [], corridors = [];
   for (const room of candidates) {
     const target = nearestCorePoint(core, room.door);
-    const path = routeToCore(polygon, room.door, target, candidates, room.id);
+    const path = routeToCore(polygon, room.door, target, candidates, room.id, floorProgram.corridorWidth);
     if (!path) continue;
     connectedRooms.push(Object.freeze({
-      id: room.id, kind: room.kind, floorIndex: room.floorIndex,
+      id: room.id, kind: room.kind, floorIndex: room.floorIndex, floorRole: room.floorRole,
       wallIndex: room.wallIndex, bayIndex: room.bayIndex,
       bayCount: room.bayCount, phase: room.phase,
       width: room.width, depth: room.depth,
@@ -277,18 +319,17 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
       door: Object.freeze(room.door)
     }));
     corridors.push(Object.freeze({
-      id: room.id + ':corridor', roomId: room.id,
-      width: CORRIDOR_WIDTH,
+      id: room.id + ':corridor',
+      roomId: room.id,
+      width: floorProgram.corridorWidth,
       points: Object.freeze(path.map(p => Object.freeze({ ...p })))
     }));
   }
 
-  const floorRole = options.floorRole || (floorIndex === 0 ? 'lobby'
-    : floorIndex === facade.floorCount - 1 ? 'top' : 'standard');
   return Object.freeze({
     id: descriptor.footprintId + ':f' + floorIndex,
     buildingId: descriptor.id, footprintId: descriptor.footprintId,
-    floorIndex, floorRole,
+    floorIndex, floorRole: floorProgram.role, floorProgram,
     floorHeight: facade.floorHeight,
     footprint: descriptor.footprint,
     core: Object.freeze({
