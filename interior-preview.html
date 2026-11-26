@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manhattan Interior Geometry Preview</title>
+<link rel="icon" href="data:,">
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101820;color:#e8edf2;font:14px/1.45 system-ui,sans-serif}
+  #view{position:fixed;inset:0}
+  #panel{position:fixed;top:18px;left:18px;z-index:2;max-width:340px;padding:14px 16px;background:#14212ddd;border:1px solid #506070;border-radius:10px;backdrop-filter:blur(10px)}
+  #panel h1{font-size:16px;margin:0 0 8px}#stats{color:#c6d2dc;font-variant-numeric:tabular-nums}
+  #error{color:#ffb5a8;white-space:pre-wrap}
+  .hint{color:#9eacb9;font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="panel"><h1>Interior Geometry · Prototype A</h1><div id="stats">Building floor plans…</div><div class="hint">Drag to orbit · Wheel to zoom · Right-drag to pan</div><div id="error"></div></div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.webgpu.js","three/webgpu":"https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.webgpu.js","three/tsl":"https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/build/three.tsl.js","three/addons/":"https://cdn.jsdelivr.net/gh/mrdoob/three.js@1d3772857eb8970ce24b3757980c5e9d46c0d6ff/examples/jsm/"}}
+</script>
+<script type="module" src="./js/interior-preview.js"></script>
+</body>
+</html>
