@@ -1,3 +1,4 @@
+exit_code=0
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createFireEscapes } from './fire-escapes.js';
@@ -38,6 +39,7 @@ import { createBuildingFootprints } from './building-footprints.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
 import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
 import { mulberry32 } from './random.js';
+import { FACADE_STYLES, facadeStyleFor } from './building-facade-style.js';
 
 // Surveyed footprints define buildings and collisions; architectural details stream around the player.
 
@@ -150,65 +152,11 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }, 6, 9);
   const allBlocks = [];
 
-  const facades = [
-    // 0: Pre-War Limestone & Buff Brick (5th Ave / Madison Ave / Upper East Side style)
-    [createPreWarBuildingMaterial, {
-      stoneColor: 0xd8cdb8,
-      trimColor: 0x9e937f,
-      windowGlassColor: 0x1a2836,
-      windowWidth: 2.6,
-      floorHeight: 3.7,
-      litProbability: 0.54,
-      warmth: 0.80,
-      seed: 12.4
-    }],
-    // 1: Historic Warm Red/Terracotta Brick (Garment District / Chelsea / SoHo / Upper West Side)
-    [createPreWarBuildingMaterial, {
-      stoneColor: 0xa45a45,
-      trimColor: 0xcab9a0,
-      windowGlassColor: 0x16222e,
-      windowWidth: 2.4,
-      floorHeight: 3.5,
-      litProbability: 0.56,
-      warmth: 0.86,
-      seed: 27.8
-    }],
-    // 2: Blue-Teal Curtain-Wall Glass (Park Ave / 6th Ave / Financial District modernism)
-    [createCurtainWallMaterial, {
-      glassTint: 0x1a3a52,
-      frameTint: 0x3b4c5b,
-      windowWidth: 2.7,
-      floorHeight: 3.9,
-      litProbability: 0.60,
-      warmth: 0.52,
-      reflectivity: 0.92,
-      seed: 63.5
-    }],
-    // 3: Dark Bronze / Charcoal Miesian Glass (Avenue of the Americas / Midtown West)
-    [createCurtainWallMaterial, {
-      glassTint: 0x242220,
-      frameTint: 0x3c3631,
-      windowWidth: 2.5,
-      floorHeight: 3.8,
-      litProbability: 0.64,
-      warmth: 0.72,
-      reflectivity: 0.88,
-      seed: 81.9
-    }],
-    // 4: Silver / Ice-Blue Contemporary Supertall Glass (Billionaires' Row / Hudson Yards / WTC)
-    [createCurtainWallMaterial, {
-      glassTint: 0x264664,
-      frameTint: 0xb0bcc8,
-      windowWidth: 2.9,
-      floorHeight: 4.1,
-      litProbability: 0.58,
-      warmth: 0.48,
-      reflectivity: 0.95,
-      seed: 94.3
-    }]
-  ];
-  const materials = facades.map(([create, opts]) => create({ ...opts, footprintLocal: true }));
-  const storeys = facades.map(([, opts]) => opts.floorHeight);
+  const materials = FACADE_STYLES.map(({ kind, options }) => {
+    const createMaterial = kind === 'masonry' ? createPreWarBuildingMaterial : createCurtainWallMaterial;
+    return createMaterial({ ...options, footprintLocal: true });
+  });
+  const storeys = FACADE_STYLES.map(style => style.options.floorHeight);
 
   const broadwayBillboards = [];
 
@@ -334,14 +282,12 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const surveyedBuckets = materials.map(() => []);
   const detailsToPlace = [];
   for (const b of surveyedBuildings) {
-    const seed = Math.round(b.cx * 31 + b.cz * 17);
-    const rand = mulberry32(seed);
-    const tone = rand();
-    const mat = b.year && b.year < 1945 ? (tone < 0.8 ? 0 : 1)
-      : b.year && b.year < 1980 ? (tone < 0.55 ? 0 : 3)
-        : tone < 0.6 ? 2 : 4;
-    // The survey has no building-use data; choose retail independently of facade style and roof details.
-    const storefronts = b.height >= 6 && mulberry32(seed ^ 0x53544f52)() < 0.55;
+    const facade = facadeStyleFor(b);
+    const rand = mulberry32(facade.seed);
+    const tone = facade.tone;
+    const mat = facade.index;
+    // The survey has no building-use data; retail placement remains an independent deterministic choice.
+    const storefronts = facade.storefronts;
     const record = { ...b, tone, storefronts };
     surveyedBuckets[mat].push(record);
     const detail = {
@@ -605,11 +551,11 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   group.add(awningInst);
 
   const signThemes = [
-    { bg: '#161210', border: '#c89d54', text: 'FIFTH AVE BISTRO · EST. 1928', color: '#ffe4a8' },
-    { bg: '#0c2244', border: '#38b6ff', text: 'DUANE READE · PHARMACY', color: '#ffffff' },
+    { bg: '#161210', border: '#c89d54', text: 'FIFTH AVE BISTRO 路 EST. 1928', color: '#ffe4a8' },
+    { bg: '#0c2244', border: '#38b6ff', text: 'DUANE READE 路 PHARMACY', color: '#ffffff' },
     { bg: '#142b20', border: '#d4af37', text: 'MANHATTAN BOOKS & ESPRESSO', color: '#fff2cc' },
-    { bg: '#280a10', border: '#ff5252', text: 'BROADWAY DELI & GRILL · 24HR', color: '#ffd180' },
-    { bg: '#101318', border: '#e0e6ed', text: 'EMPIRE WATCHES · NEW YORK', color: '#f5f9ff' }
+    { bg: '#280a10', border: '#ff5252', text: 'BROADWAY DELI & GRILL 路 24HR', color: '#ffd180' },
+    { bg: '#101318', border: '#e0e6ed', text: 'EMPIRE WATCHES 路 NEW YORK', color: '#f5f9ff' }
   ];
   const MAX_SIGNS_PER_THEME = Math.ceil(MAX_AWNINGS / signThemes.length) + 32;
   const signInsts = signThemes.map((st) => {
@@ -723,184 +669,6 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       //    roofs share a plane) so roofs & terraces keep their own roofing instead of a stone lid
       for (let i = 0; i < blk.cornices.length && corniceCount < MAX_CORNICES; i++) {
         const c = blk.cornices[i];
-        dummy.rotation.set(0, c.ry || 0, 0);
-        dummy.position.set(c.x, c.y - c.h * 0.6, c.z);
-        dummy.scale.set(c.w, c.h, c.d);
-        dummy.updateMatrix();
-        corniceInst.setMatrixAt(corniceCount++, dummy.matrix);
-      }
+        dummy.rotati
 
-      // 2. Rooftop cedar water towers
-      for (let i = 0; i < blk.waterTowers.length && wtCount < MAX_WATER_TOWERS; i++) {
-        const wt = blk.waterTowers[i];
-        dummy.rotation.set(0, wt.ry || 0, 0);
-        dummy.scale.set(1, 1, 1);
-
-        dummy.position.set(wt.x, wt.y + 1.3, wt.z);
-        dummy.updateMatrix();
-        legsInst.setMatrixAt(wtCount, dummy.matrix);
-
-        dummy.position.set(wt.x, wt.y + 4.2, wt.z);
-        dummy.updateMatrix();
-        barrelInst.setMatrixAt(wtCount, dummy.matrix);
-
-        dummy.position.set(wt.x, wt.y + 6.7, wt.z);
-        dummy.updateMatrix();
-        coneInst.setMatrixAt(wtCount, dummy.matrix);
-        wtCount++;
-      }
-
-      // 3. Rooftop HVAC & mechanical bulkheads
-      for (let i = 0; i < blk.hvacUnits.length && hvacCount < MAX_HVAC; i++) {
-        const u = blk.hvacUnits[i];
-        dummy.rotation.set(0, u.ry || 0, 0);
-        dummy.position.set(u.x, u.y + u.h * 0.5, u.z);
-        dummy.scale.set(u.w, u.h, u.d);
-        dummy.updateMatrix();
-        hvacInst.setMatrixAt(hvacCount++, dummy.matrix);
-      }
-
-      // 4. Wrought-iron fire escapes
-      for (const fe of blk.fireEscapes) fireEscapeSystem.add(fe);
-
-      // 5. Retail awnings & illuminated storefront fascia signs
-      for (let i = 0; i < blk.awnings.length && awningCount < MAX_AWNINGS; i++) {
-        const a = blk.awnings[i];
-        dummy.rotation.set(0, a.ry || 0, 0);
-        dummy.position.set(a.x, a.y, a.z);
-        dummy.scale.set(a.w, 0.75, a.d);
-        dummy.updateMatrix();
-        awningInst.setMatrixAt(awningCount, dummy.matrix);
-        awningInst.setColorAt(awningCount, awningPalette[a.colorIdx % awningPalette.length]);
-
-        const themeIdx = a.colorIdx % signInsts.length;
-        if (signCounts[themeIdx] < MAX_SIGNS_PER_THEME) {
-          dummy.position.set(a.x, a.y + 0.88, a.z);
-          dummy.scale.set(0.28, 0.86, a.d * 0.92);
-          dummy.updateMatrix();
-          signInsts[themeIdx].setMatrixAt(signCounts[themeIdx]++, dummy.matrix);
-        }
-        if (collectNearLights) {
-          activeAwnings.push({ a, themeIdx, ry: a.ry || 0 });
-        }
-        awningCount++;
-      }
-
-      // 6. Sidewalk construction sheds
-      for (let i = 0; i < blk.scaffoldSheds.length && shedCount < MAX_SHEDS; i++) {
-        const s = blk.scaffoldSheds[i];
-        dummy.rotation.set(0, s.ry || 0, 0);
-        dummy.position.set(s.x, s.y + 3.6, s.z);
-        dummy.scale.set(s.w, 0.85, s.d);
-        dummy.updateMatrix();
-        shedInst.setMatrixAt(shedCount++, dummy.matrix);
-      }
-    }
-    dummy.rotation.set(0, 0, 0);
-
-    corniceInst.count = corniceCount;
-    flagRange(corniceInst.instanceMatrix, corniceCount);
-
-    legsInst.count = wtCount;
-    barrelInst.count = wtCount;
-    coneInst.count = wtCount;
-    flagRange(legsInst.instanceMatrix, wtCount);
-    flagRange(barrelInst.instanceMatrix, wtCount);
-    flagRange(coneInst.instanceMatrix, wtCount);
-
-    hvacInst.count = hvacCount;
-    flagRange(hvacInst.instanceMatrix, hvacCount);
-
-    fireEscapeSystem.end();
-
-    awningInst.count = awningCount;
-    flagRange(awningInst.instanceMatrix, awningCount);
-    if (awningInst.instanceColor) flagRange(awningInst.instanceColor, awningCount);
-
-    signInsts.forEach((sInst, idx) => {
-      sInst.count = signCounts[idx];
-      flagRange(sInst.instanceMatrix, signCounts[idx]);
-    });
-
-    shedInst.count = shedCount;
-    flagRange(shedInst.instanceMatrix, shedCount);
-  }
-
-  function smoothFade(d, start, end) {
-    const t = Math.min(1, Math.max(0, (end - d) / (end - start)));
-    return t * t * (3 - 2 * t);
-  }
-
-  function updateLights(camera) {
-    if (!camera) {
-      for (let i = 0; i < STORE_SPOT_POOL; i++) {
-        storeSpotPool[i].intensity = 0;
-        storeSpotPool[i].position.set(0, -1000, 0);
-      }
-      return;
-    }
-
-    const camX = camera.position.x;
-    const camY = camera.position.y;
-    const camZ = camera.position.z;
-    const e = camera.matrixWorld.elements;
-    const fwdLen = Math.hypot(e[8], e[10]) || 1;
-    const fwdX = -e[8] / fwdLen;
-    const fwdZ = -e[10] / fwdLen;
-    const STORE_MAX_DIST = 115;
-
-    spotCandidates.length = 0;
-    for (let i = 0; i < activeAwnings.length; i++) {
-      const item = activeAwnings[i];
-      const a = item.a;
-      const dx = a.x - camX;
-      const dy = a.y - camY;
-      const dz = a.z - camZ;
-      const d2 = dx * dx + dz * dz + dy * dy;
-      if (d2 > STORE_MAX_DIST * STORE_MAX_DIST) continue;
-      const d = Math.sqrt(d2);
-      const forwardDot = dx * fwdX + dz * fwdZ;
-      const effDist = d + Math.max(0, 6.0 - forwardDot) * 2.8;
-      if (effDist >= STORE_MAX_DIST) continue;
-      spotCandidates.push({ item, effDist });
-    }
-    spotCandidates.sort((a, b) => a.effDist - b.effDist);
-
-    const storeCutoff = spotCandidates.length > STORE_SPOT_POOL
-      ? Math.min(STORE_MAX_DIST, spotCandidates[STORE_SPOT_POOL].effDist)
-      : STORE_MAX_DIST;
-    const activeSpots = Math.min(STORE_SPOT_POOL, spotCandidates.length);
-    for (let i = 0; i < STORE_SPOT_POOL; i++) {
-      const spot = storeSpotPool[i];
-      if (i < activeSpots) {
-        const cand = spotCandidates[i];
-        const { a, themeIdx, ry } = cand.item;
-        const fade = smoothFade(cand.effDist, storeCutoff * 0.62, storeCutoff);
-        const outX = Math.cos(ry);
-        const outZ = -Math.sin(ry);
-        spot.position.set(a.x + outX * 0.45, a.y + 0.55, a.z + outZ * 0.45);
-        spot.target.position.set(a.x + outX * 1.85, a.y - 3.8, a.z + outZ * 1.85);
-        spot.target.updateMatrixWorld();
-        spot.color.copy(storeThemeColors[themeIdx % storeThemeColors.length]);
-        spot.intensity = STORE_SPOT_INTENSITY * fade;
-      } else {
-        spot.intensity = 0;
-        spot.position.set(0, -1000, 0);
-      }
-    }
-  }
-
-  // Initial Quadtree stream centered at Midtown 5th Ave & 42nd St
-  update(0, 62, true);
-
-  scene.add(group);
-  return {
-    group,
-    colliders,
-    allBlocks,
-    update,
-    updateLights
-  };
-}
-
-export { buildCityBlocks };
+...[truncated 6225 characters]

@@ -159,118 +159,34 @@ function pointInRect(rect, point) {
   return Math.abs(u) < rect.width / 2 - 0.05 && Math.abs(v) < rect.depth / 2 - 0.05;
 }
 
-function routeToCore(polygon, start, end, rooms, sourceRoomId, bounds) {
-  const spanX = bounds.maxX - bounds.minX, spanZ = bounds.maxZ - bounds.minZ;
-  const step = 1.25;
-  const cols = Math.max(1, Math.ceil(spanX / step));
-  const rows = Math.max(1, Math.ceil(spanZ / step));
-  const pointFor = index => ({
-    x: bounds.minX + (index % cols + 0.5) * step,
-    z: bounds.minZ + (Math.floor(index / cols) + 0.5) * step
-  });
-  const expandedRoomContains = (room, point, padding) => {
-    const dx = point.x - room.rect.center.x, dz = point.z - room.rect.center.z;
-    const u = dx * room.rect.tangent.x + dz * room.rect.tangent.z;
-    const v = dx * room.rect.normal.x + dz * room.rect.normal.z;
-    return Math.abs(u) < room.rect.width / 2 + padding
-      && Math.abs(v) < room.rect.depth / 2 + padding;
-  };
-  const clearPoint = point => {
-    for (const offset of [
-      [0, 0], [0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]
-    ]) {
-      const sample = { x: point.x + offset[0], z: point.z + offset[1] };
-      if (!polygonContains(polygon, sample.x, sample.z)) return false;
-      if (rooms.some(room => room.id !== sourceRoomId && expandedRoomContains(room, sample, 0.05))) return false;
-    }
-    return true;
-  };
+function routeToCore(polygon, start, end, rooms, sourceRoomId) {
+  const routes = [
+    [start, end],
+    [start, { x: end.x, z: start.z }, end],
+    [start, { x: start.x, z: end.z }, end]
+  ];
   const clearSegment = (a, b) => {
     const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
-    if (length < 1e-5) return clearPoint(a);
+    if (length < 0.05) return polygonContains(polygon, a.x, a.z);
     const nx = -dz / length, nz = dx / length;
-    const steps = Math.max(1, Math.ceil(length / 0.5));
+    const steps = Math.max(2, Math.ceil(length / 0.75));
     for (let i = 0; i <= steps; i++) {
       const t = i / steps, center = { x: a.x + dx * t, z: a.z + dz * t };
       for (const side of [-CORRIDOR_WIDTH / 2, 0, CORRIDOR_WIDTH / 2]) {
         const sample = { x: center.x + nx * side, z: center.z + nz * side };
         if (!polygonContains(polygon, sample.x, sample.z)
-          || rooms.some(room => room.id !== sourceRoomId && expandedRoomContains(room, sample, 0.05))) return false;
+          || rooms.some(room => room.id !== sourceRoomId && pointInRect(room.rect, sample))) return false;
       }
     }
     return true;
   };
-  const nearestNode = point => {
-    const gx = Math.round((point.x - bounds.minX) / step - 0.5);
-    const gz = Math.round((point.z - bounds.minZ) / step - 0.5);
-    let best = -1, bestDistance = Infinity;
-    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
-      const x = gx + dx, z = gz + dz;
-      if (x < 0 || x >= cols || z < 0 || z >= rows) continue;
-      const index = z * cols + x, candidate = pointFor(index);
-      const distance = Math.hypot(candidate.x - point.x, candidate.z - point.z);
-      if (distance < bestDistance && clearPoint(candidate) && clearSegment(point, candidate)) {
-        best = index; bestDistance = distance;
-      }
-    }
-    return best;
-  };
-  const startNode = nearestNode(start), goalNode = nearestNode(end);
-  if (startNode < 0 || goalNode < 0) return null;
-  const heuristic = (a, b) => {
-    const dx = Math.abs(a.x - b.x), dz = Math.abs(a.z - b.z);
-    return Math.max(dx, dz) + (Math.SQRT2 - 1) * Math.min(dx, dz);
-  };
-  const open = [{ index: startNode, score: heuristic(pointFor(startNode), end) }];
-  const costs = new Map([[startNode, 0]]);
-  const parents = new Map();
-  const visited = new Set();
-  const directions = [
-    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
-    [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2]
-  ];
-  let found = false;
-  while (open.length) {
-    open.sort((a, b) => a.score - b.score);
-    const current = open.shift().index;
-    if (visited.has(current)) continue;
-    if (current === goalNode) { found = true; break; }
-    visited.add(current);
-    const cx = current % cols, cz = Math.floor(current / cols), currentPoint = pointFor(current);
-    for (const [dx, dz, cost] of directions) {
-      const x = cx + dx, z = cz + dz;
-      if (x < 0 || x >= cols || z < 0 || z >= rows) continue;
-      const next = z * cols + x;
-      if (visited.has(next)) continue;
-      const nextPoint = pointFor(next);
-      if (!clearPoint(nextPoint) || !clearSegment(currentPoint, nextPoint)) continue;
-      if (dx && dz) {
-        if (!clearPoint(pointFor(cz * cols + x)) || !clearPoint(pointFor(z * cols + cx))) continue;
-      }
-      const nextCost = costs.get(current) + cost;
-      if (nextCost >= (costs.get(next) ?? Infinity)) continue;
-      costs.set(next, nextCost);
-      parents.set(next, current);
-      open.push({ index: next, score: nextCost + heuristic(nextPoint, pointFor(goalNode)) });
-    }
+  for (const points of routes) {
+    const compact = points.filter((p, i) => i === 0
+      || Math.hypot(p.x - points[i - 1].x, p.z - points[i - 1].z) > 0.05);
+    if (compact.every(point => polygonContains(polygon, point.x, point.z))
+      && compact.slice(1).every((point, i) => clearSegment(compact[i], point))) return compact;
   }
-  if (!found) return null;
-  const path = [];
-  for (let node = goalNode; node !== undefined; node = parents.get(node)) {
-    path.push(pointFor(node));
-    if (node === startNode) break;
-  }
-  path.reverse();
-  const result = [start, ...path, end];
-  // Collapse collinear grid points to keep the renderer descriptor compact.
-  const compact = [result[0]];
-  for (let i = 1; i < result.length - 1; i++) {
-    const a = compact[compact.length - 1], b = result[i], c = result[i + 1];
-    const abx = b.x - a.x, abz = b.z - a.z, bcx = c.x - b.x, bcz = c.z - b.z;
-    if (Math.abs(abx * bcz - abz * bcx) > 0.02) compact.push(b);
-  }
-  compact.push(result[result.length - 1]);
-  return compact;
+  return null;
 }
 
 /**
@@ -347,10 +263,9 @@ export function planFloor(building, sourceIndex, facade, floorIndex = 0, options
   }
 
   const connectedRooms = [], corridors = [];
-  const footprintBounds = boundsOf(polygon.outer);
   for (const room of candidates) {
     const target = nearestCorePoint(core, room.door);
-    const path = routeToCore(polygon, room.door, target, candidates, room.id, footprintBounds);
+    const path = routeToCore(polygon, room.door, target, candidates, room.id);
     if (!path) continue;
     connectedRooms.push(Object.freeze({
       id: room.id, kind: room.kind, floorIndex: room.floorIndex,

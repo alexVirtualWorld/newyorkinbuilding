@@ -1,3 +1,4 @@
+exit_code=0
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,6 +42,7 @@
   <link rel="modulepreload" href="./js/city-grid.js" />
   <link rel="modulepreload" href="./js/boroughs.js" />
   <link rel="modulepreload" href="./js/buildings.js" />
+  <link rel="modulepreload" href="./js/building-facade-style.js" />
   <link rel="modulepreload" href="./js/building-details.js" />
   <link rel="modulepreload" href="./js/building-geodata.js" />
   <link rel="preload" href="./js/building-geodata.bin.gz" as="fetch" crossorigin />
@@ -78,7 +80,7 @@
   <link rel="stylesheet" href="./css/style.css?v=20261022-repo-link" />
 </head>
 <body>
-  <!-- Icon sprite (24 × 24 stroke icons, drawn in currentColor) -->
+  <!-- Icon sprite (24 脳 24 stroke icons, drawn in currentColor) -->
   <svg class="icon-sprite" width="0" height="0" aria-hidden="true" focusable="false">
     <defs>
       <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13" cy="4.4" r="2"/><path d="M12.3 8.2 10.8 13.8M10.8 13.8 9.2 17.2 7.2 20.5M10.8 13.8l2.4 3 1.6 3.8M12.3 8.6 9.6 10.2l-.8 2.6M12.3 8.6l2.1 2.4 2.4.8"/></symbol>
@@ -128,9 +130,9 @@
       <div class="brand-titles">
         <div class="brand-heading">
           <h1>Slop New York</h1>
-          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="Slop New York on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">↗</span></a>
+          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="Slop New York on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">鈫?/span></a>
         </div>
-        <div class="brand-subtitle">three.js · WebGPU · TSL · <span id="hud-fps" class="fps-ok">60</span> fps</div>
+        <div class="brand-subtitle">three.js 路 WebGPU 路 TSL 路 <span id="hud-fps" class="fps-ok">60</span> fps</div>
       </div>
     </div>
   </header>
@@ -172,15 +174,15 @@
   <!-- Teleport Destinations (native popover: light-dismiss & Esc) -->
   <div id="teleport-popover" class="popover" popover data-side="below" data-anchor="hud-toolbar" aria-label="Teleport the active player">
     <div class="pop-title">Teleport to</div>
-    <button id="tp-empire" class="pop-item tp-btn" data-teleport="empire" type="button"><span class="pop-name">Empire State Building</span><span class="pop-sub">5th Ave · Midtown</span></button>
-    <button id="tp-timessq" class="pop-item tp-btn" data-teleport="timessq" type="button"><span class="pop-name">Times Square</span><span class="pop-sub">7th Ave · Theater District</span></button>
-    <button id="tp-chrysler" class="pop-item tp-btn" data-teleport="chrysler" type="button"><span class="pop-name">Chrysler Building</span><span class="pop-sub">Lexington Ave · Midtown East</span></button>
-    <button id="tp-grandcentral" class="pop-item tp-btn" data-teleport="grandcentral" type="button"><span class="pop-name">Grand Central Terminal</span><span class="pop-sub">Park Ave · Midtown East</span></button>
-    <button id="tp-bryant" class="pop-item tp-btn" data-teleport="bryant" type="button"><span class="pop-name">Bryant Park</span><span class="pop-sub">6th Ave · Midtown</span></button>
-    <button id="tp-flatiron" class="pop-item tp-btn" data-teleport="flatiron" type="button"><span class="pop-name">Flatiron Building</span><span class="pop-sub">5th Ave · Flatiron District</span></button>
-    <button id="tp-centralpark" class="pop-item tp-btn" data-teleport="centralpark" type="button"><span class="pop-name">Central Park</span><span class="pop-sub">6th Ave · Central Park South</span></button>
-    <button id="tp-henge" class="pop-item tp-btn" data-teleport="henge" type="button"><span class="pop-name">Manhattanhenge</span><span class="pop-sub">34th St · best at Golden Hour</span></button>
-    <button id="tp-owtc" class="pop-item tp-btn" data-teleport="owtc" type="button"><span class="pop-name">One World Trade Center</span><span class="pop-sub">Vesey St · Financial District</span></button>
+    <button id="tp-empire" class="pop-item tp-btn" data-teleport="empire" type="button"><span class="pop-name">Empire State Building</span><span class="pop-sub">5th Ave 路 Midtown</span></button>
+    <button id="tp-timessq" class="pop-item tp-btn" data-teleport="timessq" type="button"><span class="pop-name">Times Square</span><span class="pop-sub">7th Ave 路 Theater District</span></button>
+    <button id="tp-chrysler" class="pop-item tp-btn" data-teleport="chrysler" type="button"><span class="pop-name">Chrysler Building</span><span class="pop-sub">Lexington Ave 路 Midtown East</span></button>
+    <button id="tp-grandcentral" class="pop-item tp-btn" data-teleport="grandcentral" type="button"><span class="pop-name">Grand Central Terminal</span><span class="pop-sub">Park Ave 路 Midtown East</span></button>
+    <button id="tp-bryant" class="pop-item tp-btn" data-teleport="bryant" type="button"><span class="pop-name">Bryant Park</span><span class="pop-sub">6th Ave 路 Midtown</span></button>
+    <button id="tp-flatiron" class="pop-item tp-btn" data-teleport="flatiron" type="button"><span class="pop-name">Flatiron Building</span><span class="pop-sub">5th Ave 路 Flatiron District</span></button>
+    <button id="tp-centralpark" class="pop-item tp-btn" data-teleport="centralpark" type="button"><span class="pop-name">Central Park</span><span class="pop-sub">6th Ave 路 Central Park South</span></button>
+    <button id="tp-henge" class="pop-item tp-btn" data-teleport="henge" type="button"><span class="pop-name">Manhattanhenge</span><span class="pop-sub">34th St 路 best at Golden Hour</span></button>
+    <button id="tp-owtc" class="pop-item tp-btn" data-teleport="owtc" type="button"><span class="pop-name">One World Trade Center</span><span class="pop-sub">Vesey St 路 Financial District</span></button>
   </div>
 
   <!-- Bottom-Left: Street-Name Signs & Live GPS Radar Minimap -->
@@ -201,7 +203,7 @@
       <button id="mode-person" class="mode-btn" data-mode="person" type="button" title="Person [1]">
         <svg class="icon" aria-hidden="true"><use href="#i-walk"/></svg><span class="mode-label">Walk</span><kbd>1</kbd>
       </button>
-      <button id="mode-car" class="mode-btn active" data-mode="car" type="button" title="Car · Yellow Cab [2]">
+      <button id="mode-car" class="mode-btn active" data-mode="car" type="button" title="Car 路 Yellow Cab [2]">
         <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg><span class="mode-label">Drive</span><kbd>2</kbd>
       </button>
       <button id="mode-cyclist" class="mode-btn" data-mode="cyclist" type="button" title="Cyclist [3]">
@@ -247,13 +249,13 @@
       </div>
       <span class="touch-caption">Move &amp; steer</span>
     </div>
-    <p class="touch-look-hint">Drag to look · Pinch to zoom</p>
+    <p class="touch-look-hint">Drag to look 路 Pinch to zoom</p>
     <div class="touch-actions" role="group" aria-label="Hold to perform an action">
       <button class="touch-action" data-touch-action="up" type="button" aria-label="Jump" aria-pressed="false" hidden>
-        <span aria-hidden="true">↑</span><span data-touch-label="up">Jump</span>
+        <span aria-hidden="true">鈫?/span><span data-touch-label="up">Jump</span>
       </button>
       <button class="touch-action" data-touch-action="down" type="button" aria-label="Descend" aria-pressed="false" hidden>
-        <span aria-hidden="true">↓</span><span data-touch-label="down">Descend</span>
+        <span aria-hidden="true">鈫?/span><span data-touch-label="down">Descend</span>
       </button>
     </div>
   </section>
@@ -268,7 +270,7 @@
     <button id="cam-centralPark" class="pop-item cam-btn" data-camera="centralPark" type="button"><span class="pop-name">Central Park Oasis</span></button>
     <button id="cam-fifthAve" class="pop-item cam-btn" data-camera="fifthAve" type="button"><span class="pop-name">5th Ave &amp; Empire State</span><kbd>8</kbd></button>
     <button id="cam-timesSquare" class="pop-item cam-btn" data-camera="timesSquare" type="button"><span class="pop-name">Times Square Crossroads</span><kbd>9</kbd></button>
-    <button id="cam-chryslerGCT" class="pop-item cam-btn" data-camera="chryslerGCT" type="button"><span class="pop-name">42nd St · Chrysler &amp; GCT</span><kbd>0</kbd></button>
+    <button id="cam-chryslerGCT" class="pop-item cam-btn" data-camera="chryslerGCT" type="button"><span class="pop-name">42nd St 路 Chrysler &amp; GCT</span><kbd>0</kbd></button>
     <button id="cam-observatory" class="pop-item cam-btn" data-camera="observatory" type="button"><span class="pop-name">Empire State 86th Deck</span></button>
     <button id="cam-bryantPark" class="pop-item cam-btn" data-camera="bryantPark" type="button"><span class="pop-name">Bryant Park &amp; NYPL</span></button>
     <button id="cam-waterfront" class="pop-item cam-btn" data-camera="waterfront" type="button"><span class="pop-name">East River &amp; Skyline</span></button>
@@ -291,7 +293,7 @@
       </div>
       <label class="panel fullmap-search-wrap">
         <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-        <input id="fullmap-search" class="fullmap-search" type="text" placeholder="Search streets &amp; landmarks — Broadway, Canal, Wall St…" aria-label="Search street or landmark" autocomplete="off" spellcheck="false" />
+        <input id="fullmap-search" class="fullmap-search" type="text" placeholder="Search streets &amp; landmarks 鈥?Broadway, Canal, Wall St鈥? aria-label="Search street or landmark" autocomplete="off" spellcheck="false" />
       </label>
       <button id="close-fullmap-btn" class="panel tool-btn fullmap-close" type="button" title="Close map [M / Esc]">
         <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg><span class="tool-label">Close</span><kbd>Esc</kbd>
@@ -299,7 +301,7 @@
     </div>
 
     <div class="map-controls">
-      <div class="panel map-compass" title="True north · Manhattan's street grid runs 29° east of it">
+      <div class="panel map-compass" title="True north 路 Manhattan's street grid runs 29掳 east of it">
         <svg viewBox="0 0 44 44" aria-hidden="true">
           <g id="map-compass-needle">
             <path d="M22 9.5 25.6 22h-7.2z" fill="#f05a4f"/>
@@ -320,7 +322,7 @@
 
     <div class="fullmap-footer">
       <div class="panel fullmap-status">
-        <span id="fullmap-hover-info">Click anywhere to teleport &amp; set your GPS route · Drag to pan · Scroll to zoom</span>
+        <span id="fullmap-hover-info">Click anywhere to teleport &amp; set your GPS route 路 Drag to pan 路 Scroll to zoom</span>
       </div>
     </div>
 
